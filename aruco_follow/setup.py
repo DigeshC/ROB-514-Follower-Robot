@@ -4,7 +4,7 @@ package_name = 'aruco_follow'
 
 setup(
     name=package_name,
-    version='0.0.0',
+    version='0.0.1',
     packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -13,10 +13,10 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='burger',
-    maintainer_email='burger@todo.todo',
-    description='ArUco marker detection and following node',
-    license='TODO: License declaration',
+    maintainer=Aswin Arumugam',
+    maintainer_email='arumugaa@oregonstate.edu',
+    description='ArUco marker detection and following node for TurtleBot3 with ROS 2 Jazzy.',
+    license='Apache-2.0',
     extras_require={
         'test': [
             'pytest',
