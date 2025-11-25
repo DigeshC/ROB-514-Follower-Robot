@@ -1,0 +1,3 @@
+[console_scripts]
+forward_until_distance = driver_package.forward_until_distance:main
+send_home = driver_package.send_home:main
