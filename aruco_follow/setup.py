@@ -13,7 +13,7 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer=Aswin Arumugam',
+    maintainer='Aswin Arumugam',
     maintainer_email='arumugaa@oregonstate.edu',
     description='ArUco marker detection and following node for TurtleBot3 with ROS 2 Jazzy.',
     license='Apache-2.0',
