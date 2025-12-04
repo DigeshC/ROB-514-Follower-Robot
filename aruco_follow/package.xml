@@ -2,10 +2,10 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>aruco_follow</name>
-  <version>0.0.1</version>
-  <description>TurtleBot3 ArUco marker following node using ROS 2 Jazzy</description>
-  <maintainer email="arumugaa@oregonstate.edu">Aswin Arumugam</maintainer>
-  <license>Apache-2.0</license>
+  <version>0.0.0</version>
+  <description>TODO: Package description</description>
+  <maintainer email="burger@todo.todo">burger</maintainer>
+  <license>TODO: License declaration</license>
 
   <depend>rclpy</depend>
   <depend>sensor_msgs</depend>

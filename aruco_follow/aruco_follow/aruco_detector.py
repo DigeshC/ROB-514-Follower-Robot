@@ -23,7 +23,7 @@ class ArucoDetector(Node):
 
     def image_callback(self, msg):
         cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
-        gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(cv_image, cv2.COLOR_RGB2GRAY)
 
         corners, ids, rejected = aruco.detectMarkers(
             gray, self.aruco_dict,
