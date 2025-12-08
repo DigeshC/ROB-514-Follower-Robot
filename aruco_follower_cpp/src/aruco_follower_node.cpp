@@ -7,6 +7,7 @@
 #include "geometry_msgs/msg/twist_stamped.hpp"
 #include "cv_bridge/cv_bridge.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "std_msgs/msg/bool.hpp"
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/aruco.hpp>
@@ -50,6 +51,8 @@ public:
 
     // /cmd_vel as TwistStamped
     cmd_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("/cmd_vel", 10);
+    // Publisher for go_home trigger
+    go_home_pub_ = this->create_publisher<std_msgs::msg::Bool>("/go_home", 10);
 
     // Gesture commands: "follow" / "stop"
     gesture_sub_ = this->create_subscription<std_msgs::msg::String>(
@@ -70,7 +73,6 @@ public:
 
 private:
   // --- Callbacks ---
-
   void gestureCallback(const std_msgs::msg::String::ConstSharedPtr msg)
   {
     const auto & cmd = msg->data;
@@ -80,10 +82,17 @@ private:
     } else if (cmd == "STOP") {
       follow_enabled_ = false;
       RCLCPP_INFO(this->get_logger(), "Gesture command: STOP; disabling follower.");
+    } else if (cmd == "HOME") {
+      follow_enabled_ = false;
+      home_enabled_ = true;
+      std_msgs::msg::Bool home_trigger;
+      home_trigger.data = true;
+      go_home_pub_->publish(home_trigger);
+      RCLCPP_INFO(this->get_logger(), "HOME command received → triggering send_home");
     } else {
       follow_enabled_ = false;
       RCLCPP_WARN(this->get_logger(),
-                  "Unknown gesture command: '%s' (expected 'follow' or 'stop')",
+                  "Unknown gesture command: '%s' (expected 'FOLLOW', 'STOP', or 'HOME')",
                   cmd.c_str());
     }
   }
@@ -157,10 +166,25 @@ private:
     cmd.header.stamp = this->get_clock()->now();
     cmd.header.frame_id = cmd_frame_id_;
 
-    // 1) STOP mode from gesture
-    if (!follow_enabled_) {
-      cmd.twist.linear.x = 0.0;
-      cmd.twist.angular.z = 0.0;
+      // 1) HOME mode: don't publish anything, let send_home.py control
+      if (!follow_enabled_ && home_enabled_) {
+        RCLCPP_INFO_THROTTLE(
+          this->get_logger(), *this->get_clock(), 2000,
+          "HOME mode → not publishing cmd_vel (send_home.py controls robot)");
+        return;
+      }
+  
+      // 2) STOP mode from gesture (not HOME)
+      else if (!follow_enabled_) {
+        cmd.twist.linear.x = 0.0;
+        cmd.twist.angular.z = 0.0;
+  
+        RCLCPP_INFO_THROTTLE(
+          this->get_logger(), *this->get_clock(), 2000,
+          "Follow disabled by gesture; publishing zero TwistStamped on /cmd_vel.");
+        cmd_pub_->publish(cmd);
+        return;
+      }
 
       RCLCPP_INFO_THROTTLE(
         this->get_logger(), *this->get_clock(), 2000,
@@ -231,6 +255,7 @@ private:
   // state
   bool   has_marker_{false};
   bool   follow_enabled_{false};  // controlled by /gesture_command
+  bool   home_enabled_{false};    // controlled by /gesture_command
   float  last_center_x_{0.f};
   int    last_image_width_{1};
   double last_marker_size_px_{0.0};
