@@ -21,6 +21,7 @@ find_package(OpenCV REQUIRED)
 include_directories(
   include
   ${OpenCV_INCLUDE_DIRS}
+  ${cv_bridge_INCLUDE_DIRS} 
 )
 
 add_executable(aruco_follower_node src/aruco_follower_node.cpp)

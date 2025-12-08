@@ -158,9 +158,9 @@ class HandGestureCommand(Node):
             f"(last published: {self.last_published_gesture})"
         )
 
-        # Only act if we have 10 samples
-        if len(self.gesture_history) == 10:
-            # Check if last 10 gestures are the same
+        # Only act if we have 5 samples
+        if len(self.gesture_history) == 5:
+            # Check if last 5 gestures are the same
             if len(set(self.gesture_history)) == 1:
                 stable_gesture = self.gesture_history[0]
 
