@@ -36,8 +36,8 @@ class HandGestureCommand(Node):
         # self.mp_draw = mp.solutions.drawing_utils
         # self.mp_drawing_styles = mp.solutions.drawing_styles
 
-        # Gesture history for stabilization (last 10 gestures)
-        self.gesture_history = deque(maxlen=10)
+        # Gesture history for stabilization (last 5 gestures)
+        self.gesture_history = deque(maxlen=5)
         self.last_published_gesture = None 
         self.previous_cmd = String()
         self.previous_cmd.data = "STOP"
@@ -142,9 +142,9 @@ class HandGestureCommand(Node):
         # If detected gesture is UNKNOWN or ERROR, fallback to history
         if current_gesture not in ("FOLLOW", "HOME", "STOP"):
             if len(self.gesture_history) > 0:
-                current_gesture = max(set(self.gesture_history), key=self.gesture_history.count)
+                current_gesture = self.last_published_gesture
                 self.get_logger().debug(
-                    f"Gesture UNKNOWN/ERROR - fallback to most frequent: {current_gesture}"
+                    f"Gesture UNKNOWN/ERROR - fallback to last published: {current_gesture}"
                 )
             else:
                 current_gesture = "STOP"
@@ -191,7 +191,7 @@ class HandGestureCommand(Node):
 
     # -------------------------------------------------------------------------
     def cleanup(self):
-        cv2.destroyAllWindows()
+        # cv2.destroyAllWindows()
         self.cmd.publish(String(data="STOP"))
         self.get_logger().info("Hand Gesture Controller Shutting Down")
         rclpy.shutdown()

@@ -44,7 +44,7 @@ class ArucoFollower(Node):
         self.alpha = 0.2
 
         # Safe speed limits
-        self.max_lin = 0.15
+        self.max_lin = 1.0
         self.max_ang = 1.5
 
         # Target marker pixel size
@@ -64,7 +64,10 @@ class ArucoFollower(Node):
         frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        corners, ids, _ = self.detector.detectMarkers(gray)
+        # Resize for faster processing
+        small = cv2.resize(gray, None, fx=0.5, fy=0.5)
+
+        corners, ids, _ = self.detector.detectMarkers(small)
 
         # Create stamped cmd_vel
         cmd = TwistStamped()
