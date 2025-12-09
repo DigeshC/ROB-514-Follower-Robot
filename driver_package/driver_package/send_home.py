@@ -37,12 +37,13 @@ class OdomGoHomeTriggered(Node):
         self.should_go_home = False #set to true when /go_home is triggered
 
         # Speed parameters (matched to aruco_follower_node.cpp: k_linear=0.5, k_angular=0.8)
-        self.max_linear_vel = 0.5  # m/s (matches aruco_follower k_linear)
-        self.max_angular_vel = 0.8  # rad/s (matches aruco_follower k_angular)
-        self.linear_gain = 1.5  # proportional gain for linear velocity
-        self.angular_gain = 2.0  # proportional gain for angular velocity
+        self.max_linear_vel = 0.8  # m/s (increased from 0.5)
+        self.max_angular_vel = 0.5  # rad/s (decreased from 0.8)
+        self.linear_gain = 2.0  # proportional gain for linear velocity (increased from 1.5)
+        self.angular_gain = 1.2  # proportional gain for angular velocity (decreased from 2.0)
         self.min_linear_vel = 0.2  # minimum linear velocity when close to target
-        self.angle_tolerance = 0.1  # rad (about 6 degrees) - threshold for rotation phase
+        self.angle_tolerance = 0.3  # rad (about 17 degrees) - threshold for rotation phase
+        self.forward_angle_tolerance = 0.5  # rad (about 29 degrees) - allow forward motion if within this
 
         # Calls self.update every .05s (20 Hz)
         self.timer = self.create_timer(0.05, self.update)
@@ -122,6 +123,17 @@ class OdomGoHomeTriggered(Node):
             return
 
         # Calculate angle to turn to go back home
+        # Avoid angle calculation when very close (unstable)
+        if distance < 0.1:  # Within 10 cm, just move forward
+            cmd = TwistStamped()
+            cmd.header.stamp = self.get_clock().now().to_msg()
+            cmd.header.frame_id = "base_link"
+            linear_vel = self.min_linear_vel * (distance / 0.1)  # Scale down as we approach
+            cmd.twist.linear.x = max(0.05, linear_vel)  # Minimum forward motion
+            cmd.twist.angular.z = 0.0
+            self.cmd_pub.publish(cmd)
+            return
+        
         angle_to_home = math.atan2(dy, dx) #compute where robot should be pointing
         yaw_error = self.normalize(angle_to_home - self.current_yaw) #normalize to +/- pi
         
@@ -130,17 +142,17 @@ class OdomGoHomeTriggered(Node):
         cmd.header.stamp = self.get_clock().now().to_msg()
         cmd.header.frame_id = "base_link"
 
-        # Two-phase control: rotate first, then drive forward with minimal rotation
-        
-        if abs(yaw_error) > self.angle_tolerance:
-            # Phase 1: Rotate in place to face home
-            # No linear motion until properly aligned
+        # Two-phase control: rotate only if very misaligned, otherwise move forward
+        if abs(yaw_error) > self.forward_angle_tolerance:
+            # Phase 1: Rotate in place to face home (only if very misaligned)
+            # No linear motion until reasonably aligned
             angular_vel = self.angular_gain * yaw_error
             angular_vel = max(-self.max_angular_vel, min(self.max_angular_vel, angular_vel))
             cmd.twist.linear.x = 0.0
             cmd.twist.angular.z = angular_vel
         else:
             # Phase 2: Drive forward with no angular correction
+            # Allow forward motion even if slightly misaligned (within forward_angle_tolerance)
             # Calculate linear velocity proportional to distance
             linear_vel = self.linear_gain * distance
             
