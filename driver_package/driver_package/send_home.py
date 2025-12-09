@@ -127,10 +127,11 @@ class OdomGoHomeTriggered(Node):
 
         # Rotate first
         if abs(yaw_error) > 0.18:
+            cmd.twist.linear.x = 0.0  # No forward motion while rotating
             cmd.twist.angular.z = 0.5 * np.sign(yaw_error)
         else:
             # Then move forward with small correction
-            cmd.twist.linear.x = 0.8
+            cmd.twist.linear.x = 0.5
             cmd.twist.angular.z = 0.2 * yaw_error  # Reduced from 0.4 to turn less
 
         self.cmd_pub.publish(cmd)
