@@ -74,7 +74,7 @@ class OdomGoHomeTriggered(Node):
             self.home_y = self.current_y
             self.home_yaw = self.current_yaw
             self.home_recorded = True
-        #log msg that we recorded current pos as home pos
+            #log msg that we recorded current pos as home pos
             self.get_logger().info(
                 f"Home saved at x={self.home_x:.2f}, y={self.home_y:.2f}, yaw={self.home_yaw:.2f}"
             )
@@ -82,9 +82,20 @@ class OdomGoHomeTriggered(Node):
     #Function which is callled when we get /go_home msg
     def trigger_callback(self, msg):
         if msg.data:
+            # Received true - start going home
             self.get_logger().info("Return Home Triggered") #log that we are returning home
             self.should_go_home = True
-
+        else:
+            # Received false - stop all home movement
+            self.get_logger().info("Stop Home command received → exiting HOME mode")
+            self.should_go_home = False
+            # Publish zero velocity to stop any ongoing home movement
+            stop_cmd = TwistStamped()
+            stop_cmd.header.stamp = self.get_clock().now().to_msg()
+            stop_cmd.header.frame_id = "base_link"
+            stop_cmd.twist.linear.x = 0.0
+            stop_cmd.twist.angular.z = 0.0
+            self.cmd_pub.publish(stop_cmd)
 
     def update(self):
         #if we dont have go home trigger and haven't recorded home pos do nothing
