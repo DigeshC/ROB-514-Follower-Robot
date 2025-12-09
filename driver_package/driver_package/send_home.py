@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import math
-import numpy as np
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import TwistStamped
@@ -37,7 +36,16 @@ class OdomGoHomeTriggered(Node):
         self.home_recorded = False # variable to store if home position has already been saved
         self.should_go_home = False #set to true when /go_home is triggered
 
-        # Calls self.update every .05s
+        # Speed parameters (matched to aruco_follower_node.cpp: k_linear=0.5, k_angular=0.8)
+        self.max_linear_vel = 0.5  # m/s (matches aruco_follower k_linear)
+        self.max_angular_vel = 0.8  # rad/s (matches aruco_follower k_angular)
+        self.linear_gain = 1.5  # proportional gain for linear velocity
+        self.angular_gain = 2.0  # proportional gain for angular velocity
+        self.min_linear_vel = 0.05  # minimum linear velocity when close to target
+        self.angle_tolerance = 0.1  # rad (about 6 degrees) - threshold for rotation phase
+        self.fine_angle_gain = 0.3  # small angular correction gain during forward motion
+
+        # Calls self.update every .05s (20 Hz)
         self.timer = self.create_timer(0.05, self.update)
 
         # Safety shutdown
@@ -117,19 +125,40 @@ class OdomGoHomeTriggered(Node):
         # Calculate angle to turn to go back home
         angle_to_home = math.atan2(dy, dx) #compute where robot should be pointing
         yaw_error = self.normalize(angle_to_home - self.current_yaw) #normalize to +/- pi
+        
         #build velocity command TwistStamped msg
         cmd = TwistStamped()
         cmd.header.stamp = self.get_clock().now().to_msg()
         cmd.header.frame_id = "base_link"
 
-        # Rotate first
-        if abs(yaw_error) > 0.01:
-            cmd.twist.angular.z = 0.5 * np.sign(yaw_error)
+        # Two-phase control: rotate first, then drive forward with minimal rotation
+        
+        if abs(yaw_error) > self.angle_tolerance:
+            # Phase 1: Rotate in place to face home
+            # No linear motion until properly aligned
+            angular_vel = self.angular_gain * yaw_error
+            angular_vel = max(-self.max_angular_vel, min(self.max_angular_vel, angular_vel))
             cmd.twist.linear.x = 0.0
+            cmd.twist.angular.z = angular_vel
         else:
-            # Then move forward
-            cmd.twist.linear.x = 0.12
-            cmd.twist.angular.z = 0.0
+            # Phase 2: Drive forward with minimal angular correction
+            # Calculate linear velocity proportional to distance
+            linear_vel = self.linear_gain * distance
+            
+            # Cap linear velocity
+            linear_vel = max(self.min_linear_vel, min(self.max_linear_vel, linear_vel))
+            
+            # If very close to target, reduce velocity for smoother approach
+            if distance < 0.2:  # Within 20 cm
+                linear_vel *= (distance / 0.2)  # Scale down linearly
+            
+            # Small angular correction during forward motion (fine-tuning)
+            angular_vel = self.fine_angle_gain * yaw_error
+            # Cap fine correction to prevent large corrections during forward motion
+            angular_vel = max(-0.2, min(0.2, angular_vel))
+            
+            cmd.twist.linear.x = linear_vel
+            cmd.twist.angular.z = angular_vel
 
         self.cmd_pub.publish(cmd)
 
