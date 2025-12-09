@@ -60,6 +60,13 @@ def generate_launch_description():
         ],
     )
 
+    send_home_node = Node(
+        package="driver_package",
+        executable="send_home",
+        name="send_home",
+        output="screen",
+    )
+
     # ------------------------------------------------------------
     # LaunchDescription
     # ------------------------------------------------------------
@@ -68,4 +75,5 @@ def generate_launch_description():
         v4l2_camera_node,
         gesture_node,
         aruco_follower_node,
+        send_home_node
     ])
