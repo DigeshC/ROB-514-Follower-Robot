@@ -36,8 +36,8 @@ class HandGestureCommand(Node):
         # self.mp_draw = mp.solutions.drawing_utils
         # self.mp_drawing_styles = mp.solutions.drawing_styles
 
-        # Gesture history for stabilization (last 5 gestures)
-        self.gesture_history = deque(maxlen=5)
+        # Gesture history for stabilization (last 3 gestures)
+        self.gesture_history = deque(maxlen=3)
         self.last_published_gesture = None 
         self.previous_cmd = String()
         self.previous_cmd.data = "STOP"
@@ -158,9 +158,9 @@ class HandGestureCommand(Node):
             f"(last published: {self.last_published_gesture})"
         )
 
-        # Only act if we have 5 samples
-        if len(self.gesture_history) == 5:
-            # Check if last 5 gestures are the same
+        # Only act if we have 3 samples
+        if len(self.gesture_history) == 3:
+            # Check if last 3 gestures are the same
             if len(set(self.gesture_history)) == 1:
                 stable_gesture = self.gesture_history[0]
 

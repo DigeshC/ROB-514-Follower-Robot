@@ -196,11 +196,11 @@ private:
     // 2) Follow enabled, but no marker
     if (!has_marker_) {
       cmd.twist.linear.x = 0.0;
-      cmd.twist.angular.z = 0.0;
+      cmd.twist.angular.z = 0.5;
 
       RCLCPP_INFO_THROTTLE(
         this->get_logger(), *this->get_clock(), 2000,
-        "Follow enabled but no marker; publishing zero TwistStamped.");
+        "Follow enabled but no marker; publishing rotation TwistStamped.");
       cmd_pub_->publish(cmd);
       return;
     }
