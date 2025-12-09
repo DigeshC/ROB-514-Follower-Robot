@@ -198,7 +198,7 @@ private:
     // 3) Follow enabled, but no marker
     if (!has_marker_) {
       cmd.twist.linear.x = 0.0;
-      cmd.twist.angular.z = 0.2;
+      cmd.twist.angular.z = 0.0;
 
       RCLCPP_INFO_THROTTLE(
         this->get_logger(), *this->get_clock(), 2000,
