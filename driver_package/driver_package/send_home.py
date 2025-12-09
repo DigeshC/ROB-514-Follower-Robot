@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import math
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import TwistStamped
@@ -8,93 +9,84 @@ from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool
 from rclpy.qos import QoSProfile
 
-#Convert from quaternion to yaw. Only need yaw for turtlebot
+
 def quat_to_yaw(qz, qw):
     return math.atan2(2.0 * qz * qw, qw*qw - qz*qz)
 
-#Define ROS node
+
 class OdomGoHomeTriggered(Node):
     def __init__(self):
         super().__init__('odom_go_home_triggered')
-        #keep up to 10 msgs in buffer
+
         qos = QoSProfile(depth=10)
 
-        # Create publisher that sends out TwistStamped msgs to topic /cmd_vel
+        # Publish TwistStamped (required by turtlebot3_node)
         self.cmd_pub = self.create_publisher(TwistStamped, "/cmd_vel", qos)
 
-        # Create odometry subscriber to topic /odom, function odom_callback processes odom data
+        # Subscribe to odom
         self.create_subscription(Odometry, "/odom", self.odom_callback, qos)
 
-        # Create trigger subscriber to topic /go_home which listens for home trigger
-        # ros2 topic pub /go_home std_msgs/Bool "data: true"
+        # Subscribe to trigger (from aruco_follower_node.cpp)
         self.create_subscription(Bool, "/go_home", self.trigger_callback, qos)
 
-        # Variables to store current state
-        self.current_x = 0.0 # robot's current x pos
-        self.current_y = 0.0 # robot's current y pos
-        self.current_yaw = 0.0 # robot's current yaw pos
-        self.home_recorded = False # variable to store if home position has already been saved
-        self.should_go_home = False #set to true when /go_home is triggered
+        # Internal state
+        self.current_x = 0.0
+        self.current_y = 0.0
+        self.current_yaw = 0.0
+        self.home_recorded = False
+        self.should_go_home = False
 
-        # Speed parameters (matched to aruco_follower_node.cpp: k_linear=0.5, k_angular=0.8)
-        self.max_linear_vel = 0.8  # m/s (increased from 0.5)
-        self.max_angular_vel = 0.5  # rad/s (decreased from 0.8)
-        self.linear_gain = 2.0  # proportional gain for linear velocity (increased from 1.5)
-        self.angular_gain = 1.2  # proportional gain for angular velocity (decreased from 2.0)
-        self.min_linear_vel = 0.2  # minimum linear velocity when close to target
-        self.angle_tolerance = 0.3  # rad (about 17 degrees) - threshold for rotation phase
-        self.forward_angle_tolerance = 0.5  # rad (about 29 degrees) - allow forward motion if within this
-
-        # Calls self.update every .05s (20 Hz)
+        # Timer
         self.timer = self.create_timer(0.05, self.update)
 
         # Safety shutdown
         rclpy.get_default_context().on_shutdown(self.safe_stop)
 
-        #Log to useer when node is triggerd (i.e recieve go home trigger)
         self.get_logger().info("Go-Home Triggered Node Running...")
 
-   #Create stop Twist
+    # ------------------------------------------------------
+    # SAFETY STOP
+    # ------------------------------------------------------
     def safe_stop(self):
-        stop = TwistStamped() #new TwistStamped msg called stop
-        stop.header.stamp = self.get_clock().now().to_msg() # curernt time from clock
-        stop.header.frame_id = "base_link" #send stop command to base_link
+        stop = TwistStamped()
+        stop.header.stamp = self.get_clock().now().to_msg()
+        stop.header.frame_id = "base_link"
 
-        for _ in range(5):  # publish stop 5 times to /cmd_vel
+        for _ in range(5):  # ensure stop delivered
             self.cmd_pub.publish(stop)
 
-        #Log when safety stop is implemented
         self.get_logger().warn("SAFETY STOP — Robot Halted")
 
-    #Odom callback function which processes /odom data
-    #input to function -> self, and /odom msgs. Triggered whenever new odom msg arrives
+    # ------------------------------------------------------
+    # ODOM CALLBACK
+    # ------------------------------------------------------
     def odom_callback(self, msg):
-        self.current_x = msg.pose.pose.position.x #store current x position
-        self.current_y = msg.pose.pose.position.y #store current y position
+        self.current_x = msg.pose.pose.position.x
+        self.current_y = msg.pose.pose.position.y
 
-        qz = msg.pose.pose.orientation.z #store quaternion qz
-        qw = msg.pose.pose.orientation.w #store quaternion qw
-        self.current_yaw = quat_to_yaw(qz, qw) # convert quaternion to yaw and store
+        qz = msg.pose.pose.orientation.z
+        qw = msg.pose.pose.orientation.w
+        self.current_yaw = quat_to_yaw(qz, qw)
 
-        #Set current starting position as home
         if not self.home_recorded:
             self.home_x = self.current_x
             self.home_y = self.current_y
             self.home_yaw = self.current_yaw
             self.home_recorded = True
-            #log msg that we recorded current pos as home pos
+
             self.get_logger().info(
                 f"Home saved at x={self.home_x:.2f}, y={self.home_y:.2f}, yaw={self.home_yaw:.2f}"
             )
 
-    #Function which is callled when we get /go_home msg
+    # ------------------------------------------------------
+    # TRIGGER CALLBACK
+    # ------------------------------------------------------
     def trigger_callback(self, msg):
         if msg.data:
-            # Received true - start going home
-            self.get_logger().info("Return Home Triggered") #log that we are returning home
+            self.get_logger().info("🚀 Return Home Triggered")
             self.should_go_home = True
         else:
-            # Received false - stop all home movement
+            # Received false - stop all home movement (from aruco_follower_node.cpp)
             self.get_logger().info("Stop Home command received → exiting HOME mode")
             self.should_go_home = False
             # Publish zero velocity to stop any ongoing home movement
@@ -105,75 +97,51 @@ class OdomGoHomeTriggered(Node):
             stop_cmd.twist.angular.z = 0.0
             self.cmd_pub.publish(stop_cmd)
 
+    # ------------------------------------------------------
+    # CONTROL LOOP — POSITION ONLY
+    # ------------------------------------------------------
     def update(self):
-        #if we dont have go home trigger and haven't recorded home pos do nothing
+
         if not self.should_go_home or not self.home_recorded:
             return
 
-        # x,y vector to home
+        # Vector to home
         dx = self.home_x - self.current_x
         dy = self.home_y - self.current_y
         distance = math.sqrt(dx * dx + dy * dy)
 
-        # stop moving if within 5 cm of home position
+        # If close enough, stop
         if distance < 0.05:
-            self.get_logger().info("Arrived home (position only).")
+            self.get_logger().info("🏠 Arrived home (position only).")
             self.safe_stop()
             self.should_go_home = False
             return
 
-        # Calculate angle to turn to go back home
-        # Avoid angle calculation when very close (unstable)
-        if distance < 0.1:  # Within 10 cm, just move forward
-            cmd = TwistStamped()
-            cmd.header.stamp = self.get_clock().now().to_msg()
-            cmd.header.frame_id = "base_link"
-            linear_vel = self.min_linear_vel * (distance / 0.1)  # Scale down as we approach
-            cmd.twist.linear.x = max(0.05, linear_vel)  # Minimum forward motion
-            cmd.twist.angular.z = 0.0
-            self.cmd_pub.publish(cmd)
-            return
-        
-        angle_to_home = math.atan2(dy, dx) #compute where robot should be pointing
-        yaw_error = self.normalize(angle_to_home - self.current_yaw) #normalize to +/- pi
-        
-        #build velocity command TwistStamped msg
+        # Heading to home
+        angle_to_home = math.atan2(dy, dx)
+        yaw_error = self.normalize(angle_to_home - self.current_yaw)
+
         cmd = TwistStamped()
         cmd.header.stamp = self.get_clock().now().to_msg()
         cmd.header.frame_id = "base_link"
 
-        # Two-phase control: rotate only if very misaligned, otherwise move forward
-        if abs(yaw_error) > self.forward_angle_tolerance:
-            # Phase 1: Rotate in place to face home (only if very misaligned)
-            # No linear motion until reasonably aligned
-            angular_vel = self.angular_gain * yaw_error
-            angular_vel = max(-self.max_angular_vel, min(self.max_angular_vel, angular_vel))
-            cmd.twist.linear.x = 0.0
-            cmd.twist.angular.z = angular_vel
+        # Rotate first
+        if abs(yaw_error) > 0.18:
+            cmd.twist.angular.z = 0.5 * np.sign(yaw_error)
         else:
-            # Phase 2: Drive forward with no angular correction
-            # Allow forward motion even if slightly misaligned (within forward_angle_tolerance)
-            # Calculate linear velocity proportional to distance
-            linear_vel = self.linear_gain * distance
-            
-            # Cap linear velocity
-            linear_vel = max(self.min_linear_vel, min(self.max_linear_vel, linear_vel))
-            
-            # If very close to target, reduce velocity for smoother approach
-            if distance < 0.2:  # Within 20 cm
-                linear_vel *= (distance / 0.2)  # Scale down linearly
-            
-            # No angular correction during forward motion
-            cmd.twist.linear.x = linear_vel
-            cmd.twist.angular.z = 0.0
+            # Then move forward with small correction
+            cmd.twist.linear.x = 0.8
+            cmd.twist.angular.z = 0.2 * yaw_error  # Reduced from 0.4 to turn less
 
         self.cmd_pub.publish(cmd)
 
-    # Normalize angle to +/- pi
+    # ------------------------------------------------------
     def normalize(self, a):
         return math.atan2(math.sin(a), math.cos(a))
 
-#main function
+# ------------------------------------------------------
+# MAIN
+# ------------------------------------------------------
 def main(args=None):
     rclpy.init(args=args)
     node = OdomGoHomeTriggered()
