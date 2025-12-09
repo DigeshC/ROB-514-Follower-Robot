@@ -186,13 +186,6 @@ private:
         return;
       }
 
-      RCLCPP_INFO_THROTTLE(
-        this->get_logger(), *this->get_clock(), 2000,
-        "Follow disabled by gesture; publishing zero TwistStamped on /cmd_vel.");
-      cmd_pub_->publish(cmd);
-      return;
-    }
-
     // 2) Follow enabled, but no marker
     if (!has_marker_) {
       cmd.twist.linear.x = 0.0;
@@ -246,6 +239,7 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr gesture_sub_;
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_pub_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr go_home_pub_;
   rclcpp::TimerBase::SharedPtr control_timer_;
 
   // ArUco
