@@ -41,9 +41,8 @@ class OdomGoHomeTriggered(Node):
         self.max_angular_vel = 0.8  # rad/s (matches aruco_follower k_angular)
         self.linear_gain = 1.5  # proportional gain for linear velocity
         self.angular_gain = 2.0  # proportional gain for angular velocity
-        self.min_linear_vel = 0.05  # minimum linear velocity when close to target
+        self.min_linear_vel = 0.2  # minimum linear velocity when close to target
         self.angle_tolerance = 0.1  # rad (about 6 degrees) - threshold for rotation phase
-        self.fine_angle_gain = 0.3  # small angular correction gain during forward motion
 
         # Calls self.update every .05s (20 Hz)
         self.timer = self.create_timer(0.05, self.update)
@@ -141,7 +140,7 @@ class OdomGoHomeTriggered(Node):
             cmd.twist.linear.x = 0.0
             cmd.twist.angular.z = angular_vel
         else:
-            # Phase 2: Drive forward with minimal angular correction
+            # Phase 2: Drive forward with no angular correction
             # Calculate linear velocity proportional to distance
             linear_vel = self.linear_gain * distance
             
@@ -152,13 +151,9 @@ class OdomGoHomeTriggered(Node):
             if distance < 0.2:  # Within 20 cm
                 linear_vel *= (distance / 0.2)  # Scale down linearly
             
-            # Small angular correction during forward motion (fine-tuning)
-            angular_vel = self.fine_angle_gain * yaw_error
-            # Cap fine correction to prevent large corrections during forward motion
-            angular_vel = max(-0.2, min(0.2, angular_vel))
-            
+            # No angular correction during forward motion
             cmd.twist.linear.x = linear_vel
-            cmd.twist.angular.z = angular_vel
+            cmd.twist.angular.z = 0.0
 
         self.cmd_pub.publish(cmd)
 
